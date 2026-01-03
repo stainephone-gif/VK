@@ -16,9 +16,13 @@ dist/
 
 # Results
 results/
-*.json
-*.md
+results*.json
+results*.md
+
+# Documentation (keep these)
 !README.md
+!QUICKSTART.md
+!QUICKSTART_SIMPLE.md
 
 # IDE
 .vscode/
