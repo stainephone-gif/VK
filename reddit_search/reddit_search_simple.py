@@ -18,23 +18,34 @@ class SimpleRedditSearcher:
     def __init__(self):
         """Инициализация"""
         self.session = requests.Session()
-        # User agent для соблюдения правил Reddit
+
+        # ВАЖНО: Отключаем прокси для доступа к Reddit
+        self.session.trust_env = False
+        self.session.proxies = {}
+
+        # Улучшенные заголовки для обхода блокировки Reddit
         self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Accept-Encoding': 'gzip, deflate',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
+            'Sec-Fetch-Dest': 'document',
+            'Sec-Fetch-Mode': 'navigate',
+            'Sec-Fetch-Site': 'none',
+            'Cache-Control': 'max-age=0'
         })
         self.found_cases = []
         self.request_count = 0
         self.last_request_time = time.time()
 
     def _rate_limit(self):
-        """Контроль частоты запросов (2 запроса в секунду для публичного API)"""
-        self.request_count += 1
-        if self.request_count >= 2:
-            elapsed = time.time() - self.last_request_time
-            if elapsed < 1:
-                time.sleep(1 - elapsed)
-            self.request_count = 0
-            self.last_request_time = time.time()
+        """Контроль частоты запросов (1 запрос в 2 секунды для надежности)"""
+        elapsed = time.time() - self.last_request_time
+        if elapsed < 2:
+            time.sleep(2 - elapsed)
+        self.last_request_time = time.time()
 
     def search_subreddit(self, subreddit_name: str, query: str = None, limit: int = 100) -> List[Dict]:
         """
@@ -51,7 +62,7 @@ class SimpleRedditSearcher:
         try:
             if query:
                 # Поиск по запросу
-                url = f"https://www.reddit.com/r/{subreddit_name}/search.json"
+                url = f"https://old.reddit.com/r/{subreddit_name}/search.json"
                 params = {
                     'q': query,
                     'restrict_sr': 'on',
@@ -61,12 +72,17 @@ class SimpleRedditSearcher:
                 print(f"  Поиск в r/{subreddit_name} по запросу: '{query}'")
             else:
                 # Топ посты
-                url = f"https://www.reddit.com/r/{subreddit_name}/hot.json"
+                url = f"https://old.reddit.com/r/{subreddit_name}/hot.json"
                 params = {'limit': min(limit, 100)}
                 print(f"  Получение постов из r/{subreddit_name}")
 
             self._rate_limit()
-            response = self.session.get(url, params=params, timeout=10)
+
+            try:
+                response = self.session.get(url, params=params, timeout=15)
+            except Exception as e:
+                print(f"    Ошибка соединения: {e}")
+                return []
 
             if response.status_code == 200:
                 data = response.json()
@@ -98,7 +114,14 @@ class SimpleRedditSearcher:
             params = {'limit': limit}
 
             self._rate_limit()
-            response = self.session.get(url, params=params, timeout=10)
+
+            # Используем old.reddit для комментариев
+            url_old = url.replace('www.reddit.com', 'old.reddit.com')
+
+            try:
+                response = self.session.get(url_old, params=params, timeout=15)
+            except:
+                response = self.session.get(url, params=params, timeout=15)
 
             if response.status_code == 200:
                 data = response.json()
